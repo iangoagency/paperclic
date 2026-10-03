@@ -12,7 +12,7 @@ import {
   writeDevServerRestartRequest,
 } from "../dev-server-status.js";
 import { logger } from "../middleware/logger.js";
-import { isMagicLinkSignInEnabled, isPasswordSignInDisabled } from "../auth/magic-link.js";
+import { isEmailCodeSignInEnabled, isPasswordSignInDisabled } from "../auth/email-code.js";
 import { getServerInfoSnapshot, type ServerInfoSnapshot } from "../server-info.js";
 import {
   getCloudStackContext,
@@ -55,7 +55,7 @@ function shouldExposeFullHealthDetails(
 // keys keep the response identical to upstream when the feature is off.
 function signInMethodFlags() {
   return {
-    ...(isMagicLinkSignInEnabled() ? { magicLinkSignIn: true } : {}),
+    ...(isEmailCodeSignInEnabled() ? { emailCodeSignIn: true } : {}),
     ...(isPasswordSignInDisabled() ? { passwordSignInDisabled: true } : {}),
   };
 }

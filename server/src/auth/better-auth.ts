@@ -13,10 +13,10 @@ import {
 import type { Config } from "../config.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
 import {
-  createMagicLinkPlugin,
+  createEmailCodePlugin,
   isPasswordSignInDisabled,
-  resolveMagicLinkMailConfig,
-} from "./magic-link.js";
+  resolveEmailCodeMailConfig,
+} from "./email-code.js";
 import {
   workspaceLoginHandoffPlugin,
   type WorkspaceHandoffExpectedIdentity,
@@ -262,7 +262,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
 
-  const magicLinkMail = resolveMagicLinkMailConfig();
+  const emailCodeMail = resolveEmailCodeMailConfig();
   const authPlugins = [
     // Registered only for a managed workspace instance: the plugin is what makes
     // `Open workspace` password-independent, and a control-plane instance that
@@ -284,7 +284,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
           }),
         ]
       : []),
-    ...(magicLinkMail ? [createMagicLinkPlugin(db, magicLinkMail)] : []),
+    ...(emailCodeMail ? [createEmailCodePlugin(db, emailCodeMail)] : []),
   ];
 
   const authConfig = {
