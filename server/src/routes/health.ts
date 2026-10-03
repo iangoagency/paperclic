@@ -12,6 +12,7 @@ import {
   writeDevServerRestartRequest,
 } from "../dev-server-status.js";
 import { logger } from "../middleware/logger.js";
+import { isMagicLinkSignInEnabled, isPasswordSignInDisabled } from "../auth/magic-link.js";
 import { getServerInfoSnapshot, type ServerInfoSnapshot } from "../server-info.js";
 import {
   getCloudStackContext,
@@ -48,6 +49,15 @@ function shouldExposeFullHealthDetails(
 ) {
   if (deploymentMode !== "authenticated") return true;
   return actorType === "board" || actorType === "agent";
+}
+
+// Kaamel fork: the sign-in page needs these before a session exists. Absent
+// keys keep the response identical to upstream when the feature is off.
+function signInMethodFlags() {
+  return {
+    ...(isMagicLinkSignInEnabled() ? { magicLinkSignIn: true } : {}),
+    ...(isPasswordSignInDisabled() ? { passwordSignInDisabled: true } : {}),
+  };
 }
 
 function matchesSharedToken(expectedToken: string | undefined | null, providedToken: string | undefined) {
@@ -396,6 +406,7 @@ export function healthRoutes(
         commit,
         bootstrapStatus,
         bootstrapInviteActive,
+        ...signInMethodFlags(),
         ...(redactedDatabaseBackup ? { databaseBackup: redactedDatabaseBackup } : {}),
         ...(redactedWarnings ? { warnings: redactedWarnings } : {}),
         ...(devServer ? { devServer } : {}),
@@ -420,6 +431,7 @@ export function healthRoutes(
       authReady: opts.authReady,
       bootstrapStatus,
       bootstrapInviteActive,
+      ...signInMethodFlags(),
       features: {
         companyDeletionEnabled: opts.companyDeletionEnabled,
       },

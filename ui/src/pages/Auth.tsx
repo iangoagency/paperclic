@@ -24,7 +24,11 @@ export function AuthPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
+  // A failed emailed link lands back here with `?error=`; say so instead of a bare form.
+  const [error, setError] = useState<string | null>(
+    searchParams.get("error") ? "That sign-in link is invalid or has expired. Request a new one." : null,
+  );
+  const [linkSentTo, setLinkSentTo] = useState<string | null>(null);
   const errorId = "auth-error";
 
   const nextPath = useMemo(
@@ -77,10 +81,42 @@ export function AuthPage() {
     },
   });
 
-  const canSubmit =
-    email.trim().length > 0 &&
-    password.trim().length > 0 &&
-    (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
+  const linkMutation = useMutation({
+    mutationFn: async () => {
+      await authApi.signInMagicLink({
+        email: email.trim(),
+        callbackURL: nextPath,
+        errorCallbackURL: "/auth",
+      });
+    },
+    onSuccess: () => {
+      setError(null);
+      setLinkSentTo(email.trim());
+    },
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : "Could not send the sign-in link");
+    },
+  });
+
+  const magicLinkEnabled = healthQuery.data?.magicLinkSignIn === true;
+  const passwordDisabled = magicLinkEnabled && healthQuery.data?.passwordSignInDisabled === true;
+  const linkOnly = passwordDisabled && mode === "sign_in";
+  const isPending = mutation.isPending || linkMutation.isPending;
+
+  const requestLink = () => {
+    if (isPending) return;
+    if (email.trim().length === 0) {
+      setError("Enter your email to receive a sign-in link.");
+      return;
+    }
+    linkMutation.mutate();
+  };
+
+  const canSubmit = linkOnly
+    ? email.trim().length > 0
+    : email.trim().length > 0 &&
+      password.trim().length > 0 &&
+      (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
 
   if (healthQuery.isLoading || isSessionLoading || session) {
     return (
@@ -115,10 +151,18 @@ export function AuthPage() {
             {mode === "sign_in" ? "Sign in to Paperclip" : "Create your Paperclip account"}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "sign_in"
-              ? "Use your email and password to access this instance."
-              : "Create an account for this instance. Email confirmation is not required in v1."}
+            {linkOnly
+              ? "Enter your email and we'll send you a sign-in link."
+              : mode === "sign_in"
+                ? "Use your email and password to access this instance."
+                : "Create an account for this instance. Email confirmation is not required in v1."}
           </p>
+
+          {linkSentTo && (
+            <p role="status" className="mt-4 rounded-md border border-border px-3 py-2 text-sm">
+              If {linkSentTo} has an account, a sign-in link is on its way. It expires in 10 minutes and works once.
+            </p>
+          )}
 
           <form
             className="mt-6 space-y-4"
@@ -126,7 +170,11 @@ export function AuthPage() {
             action={mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
             onSubmit={(event) => {
               event.preventDefault();
-              if (mutation.isPending) return;
+              if (isPending) return;
+              if (linkOnly) {
+                requestLink();
+                return;
+              }
               if (!canSubmit) {
                 setError("Please fill in all required fields.");
                 return;
@@ -169,6 +217,7 @@ export function AuthPage() {
                 autoFocus={mode === "sign_in"}
               />
             </div>
+            {!linkOnly && (
             <div>
               <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">Password</label>
               <input
@@ -185,6 +234,7 @@ export function AuthPage() {
                 aria-describedby={error ? errorId : undefined}
               />
             </div>
+            )}
             {error && (
               <p id={errorId} role="alert" className="text-xs text-destructive">
                 {error}
@@ -192,19 +242,32 @@ export function AuthPage() {
             )}
             <Button
               type="submit"
-              disabled={mutation.isPending}
-              aria-disabled={!canSubmit || mutation.isPending}
-              className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
+              disabled={isPending}
+              aria-disabled={!canSubmit || isPending}
+              className={`w-full ${!canSubmit && !isPending ? "opacity-50" : ""}`}
             >
-              {mutation.isPending
+              {isPending
                 ? "Working…"
-                : mode === "sign_in"
-                  ? "Sign In"
-                  : "Create Account"}
+                : linkOnly
+                  ? "Email me a sign-in link"
+                  : mode === "sign_in"
+                    ? "Sign In"
+                    : "Create Account"}
             </Button>
+            {magicLinkEnabled && !passwordDisabled && mode === "sign_in" && (
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isPending}
+                className="w-full"
+                onClick={requestLink}
+              >
+                Email me a sign-in link
+              </Button>
+            )}
           </form>
 
-          <div className="mt-5 text-sm text-muted-foreground">
+          <div className={`mt-5 text-sm text-muted-foreground ${passwordDisabled ? "hidden" : ""}`}>
             {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
             <button
               type="button"

@@ -175,6 +175,10 @@ export const authApi = {
     await authPost("/sign-in/email", input);
   },
 
+  signInMagicLink: async (input: { email: string; callbackURL: string; errorCallbackURL: string }) => {
+    await authPost("/sign-in/magic-link", input);
+  },
+
   signUpEmail: async (input: { name: string; email: string; password: string }) => {
     await authPost("/sign-up/email", input);
   },

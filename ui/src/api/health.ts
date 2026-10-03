@@ -36,6 +36,10 @@ export type HealthStatus = {
   authReady?: boolean;
   bootstrapStatus?: "ready" | "bootstrap_pending";
   bootstrapInviteActive?: boolean;
+  /** Kaamel fork: sign-in by emailed link is available on this instance. */
+  magicLinkSignIn?: boolean;
+  /** Kaamel fork: the emailed link is the only way in; hide the password form. */
+  passwordSignInDisabled?: boolean;
   features?: {
     companyDeletionEnabled?: boolean;
   };

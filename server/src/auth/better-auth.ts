@@ -13,6 +13,11 @@ import {
 import type { Config } from "../config.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
 import {
+  createMagicLinkPlugin,
+  isPasswordSignInDisabled,
+  resolveMagicLinkMailConfig,
+} from "./magic-link.js";
+import {
   workspaceLoginHandoffPlugin,
   type WorkspaceHandoffExpectedIdentity,
 } from "./workspace-login-handoff-plugin.js";
@@ -257,6 +262,31 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
 
+  const magicLinkMail = resolveMagicLinkMailConfig();
+  const authPlugins = [
+    // Registered only for a managed workspace instance: the plugin is what makes
+    // `Open workspace` password-independent, and a control-plane instance that
+    // was never handed a workspace key must not expose the exchange at all.
+    ...(resolveWorkspaceHandoffIdentity(config)
+      ? [
+          workspaceLoginHandoffPlugin({
+            db,
+            // Re-resolved per exchange so a hot restart cannot keep validating
+            // against an origin the control plane has since republished.
+            resolveExpectedIdentity: () =>
+              resolveWorkspaceHandoffIdentity(config) ?? {
+                key: null,
+                instanceId: null,
+                executionWorkspaceId: null,
+                companyId: null,
+                origin: null,
+              },
+          }),
+        ]
+      : []),
+    ...(magicLinkMail ? [createMagicLinkPlugin(db, magicLinkMail)] : []),
+  ];
+
   const authConfig = {
     baseURL: baseUrl,
     secret,
@@ -271,7 +301,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       },
     }),
     emailAndPassword: {
-      enabled: true,
+      enabled: !isPasswordSignInDisabled(),
       requireEmailVerification: false,
       disableSignUp: config.authDisableSignUp,
     },
@@ -281,28 +311,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       override: process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED,
     }),
     advanced: buildBetterAuthAdvancedOptions({ disableSecureCookies }),
-    // Registered only for a managed workspace instance: the plugin is what makes
-    // `Open workspace` password-independent, and a control-plane instance that
-    // was never handed a workspace key must not expose the exchange at all.
-    ...(resolveWorkspaceHandoffIdentity(config)
-      ? {
-          plugins: [
-            workspaceLoginHandoffPlugin({
-              db,
-              // Re-resolved per exchange so a hot restart cannot keep validating
-              // against an origin the control plane has since republished.
-              resolveExpectedIdentity: () =>
-                resolveWorkspaceHandoffIdentity(config) ?? {
-                  key: null,
-                  instanceId: null,
-                  executionWorkspaceId: null,
-                  companyId: null,
-                  origin: null,
-                },
-            }),
-          ],
-        }
-      : {}),
+    ...(authPlugins.length > 0 ? { plugins: authPlugins } : {}),
   };
 
   if (!baseUrl) {
